@@ -59,3 +59,4 @@ Ver `Project Knowledge / 03-progress.md` para el checklist en vivo.
 - Mensajes en inglés al usuario → **no**, todo en español.
 - Variables globales → **no**, excepto constantes cargadas de config.
 - Print de tracebacks al usuario → **no**, manejar con mensaje claro.
+Estamos construyendo una entrega para Gigathon 2026. Consulta siempre 01-spec.md antes de proponer cambios. Si una decisión no está cubierta por la spec, pregunta antes de improvisar. Strings de usuario en español, código en inglés. Solo stdlib de Python 3.11. zero comentarios en el codigo a menos que se hayan pedido explicitamente, y en ese caso, hacerlos basicos sin el toque obvio de IA
