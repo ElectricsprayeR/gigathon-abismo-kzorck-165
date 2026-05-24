@@ -1,0 +1,260 @@
+{
+  "world": {
+    "x_min": -100,
+    "x_max": 100,
+    "y_min": -100,
+    "y_max": 0,
+    "base_x": 0,
+    "base_y": 0,
+    "depth_penalty_threshold_1": -50,
+    "depth_penalty_threshold_2": -80
+  },
+
+  "resources": {
+    "battery_initial": 100,
+    "battery_min": 0,
+    "hull_initial": 100,
+    "hull_min": 0,
+    "oxygen_min": 0,
+    "oxygen_decay_base": 1,
+    "oxygen_decay_depth_1": 1,
+    "oxygen_decay_depth_2": 1
+  },
+
+  "difficulty": {
+    "facil": {
+      "oxygen_initial": 120,
+      "step_limit": 100,
+      "event_probability": 0.10,
+      "atalaya_zone": {
+        "x_min": -30, "x_max": 30,
+        "y_min": -40, "y_max": -20
+      },
+      "element_counts": {
+        "HYDRO": 7,
+        "WRECK": 4,
+        "CURRENT": 4,
+        "SQUID": 2,
+        "CAVE": 4,
+        "PRESSURE": 3
+      }
+    },
+    "normal": {
+      "oxygen_initial": 100,
+      "step_limit": 80,
+      "event_probability": 0.15,
+      "atalaya_zone": {
+        "x_min": -50, "x_max": 50,
+        "y_min": -70, "y_max": -30
+      },
+      "element_counts": {
+        "HYDRO": 5,
+        "WRECK": 3,
+        "CURRENT": 6,
+        "SQUID": 3,
+        "CAVE": 3,
+        "PRESSURE": 4
+      }
+    },
+    "dificil": {
+      "oxygen_initial": 80,
+      "step_limit": 60,
+      "event_probability": 0.22,
+      "atalaya_zone": {
+        "x_min": -80, "x_max": 80,
+        "y_min": -95, "y_max": -50
+      },
+      "element_counts": {
+        "HYDRO": 3,
+        "WRECK": 2,
+        "CURRENT": 8,
+        "SQUID": 5,
+        "CAVE": 2,
+        "PRESSURE": 5
+      }
+    }
+  },
+
+  "elements": {
+    "HYDRO": {
+      "name_es": "Fuente hidrotermal",
+      "count_normal": 5,
+      "reusable": false,
+      "effect": {
+        "battery_set": 100
+      }
+    },
+    "WRECK": {
+      "name_es": "Restos de naufragio",
+      "count_normal": 3,
+      "reusable": false,
+      "effect": {
+        "atalaya_range_reduction_pct": 25
+      }
+    },
+    "CURRENT": {
+      "name_es": "Corriente abisal",
+      "count_normal": 6,
+      "reusable": true,
+      "effect": {
+        "next_turn_drift_x_range": [-5, 5],
+        "next_turn_drift_y_range": [-5, 5]
+      }
+    },
+    "SQUID": {
+      "name_es": "Calamar gigante",
+      "count_normal": 3,
+      "reusable": true,
+      "effect": {
+        "hull_damage": 15
+      },
+      "moves_each_turn": true,
+      "move_range": 1
+    },
+    "CAVE": {
+      "name_es": "Cueva submarina",
+      "count_normal": 3,
+      "reusable": false,
+      "effect": {
+        "hull_set": 100
+      }
+    },
+    "PRESSURE": {
+      "name_es": "Bolsa de presion",
+      "count_normal": 4,
+      "reusable": false,
+      "effect": {
+        "bonus_probability": 0.50,
+        "bonus_effect": {
+          "free_scan": true
+        },
+        "penalty_effect": {
+          "hull_damage": 5,
+          "oxygen_damage": 5
+        }
+      }
+    }
+  },
+
+  "events": {
+    "LEAK": {
+      "name_es": "Microfuga",
+      "effect": {
+        "oxygen_damage": 10
+      }
+    },
+    "GHOST": {
+      "name_es": "Sonar fantasma",
+      "effect": {
+        "next_scan_false": true
+      }
+    },
+    "BEACON": {
+      "name_es": "Faro de emergencia",
+      "effect": {
+        "reveal_atalaya_direction_turns": 1
+      }
+    },
+    "BIOLUM": {
+      "name_es": "Banco bioluminiscente",
+      "effect": {
+        "reveal_elements_radius": 15
+      }
+    },
+    "LANDSLIDE": {
+      "name_es": "Derrumbe submarino",
+      "effect": {
+        "block_adjacent_coord_turns": -1
+      }
+    }
+  },
+
+  "actions": {
+    "N": {
+      "label_es": "Mover norte (+y)",
+      "dy": 1,
+      "dx": 0,
+      "battery_cost": 1
+    },
+    "S": {
+      "label_es": "Mover sur (-y)",
+      "dy": -1,
+      "dx": 0,
+      "battery_cost": 1
+    },
+    "E": {
+      "label_es": "Mover este (+x)",
+      "dy": 0,
+      "dx": 1,
+      "battery_cost": 1
+    },
+    "O": {
+      "label_es": "Mover oeste (-x)",
+      "dy": 0,
+      "dx": -1,
+      "battery_cost": 1
+    },
+    "escanear": {
+      "label_es": "Escanear (radio 10)",
+      "battery_cost": 5,
+      "scan_radius": 10
+    },
+    "esperar": {
+      "label_es": "Esperar y reparar",
+      "battery_cost": 2,
+      "oxygen_cost": 2,
+      "hull_repair": 5
+    },
+    "salir": {
+      "label_es": "Abandonar mision",
+      "battery_cost": 0
+    }
+  },
+
+  "end_conditions": {
+    "bound_violation_limit": 5,
+    "evaluation_order": ["LOSE_HULL", "LOSE_OXY", "LOSE_BOUNDS", "LOSE_STEPS", "WIN_FULL", "WIN_PARTIAL", "QUIT"]
+  },
+
+  "validation": {
+    "captain_name": {
+      "min_length": 1,
+      "max_length": 30,
+      "default": "Capitan"
+    },
+    "submarine_name": {
+      "min_length": 1,
+      "max_length": 30,
+      "default": "Abismo"
+    },
+    "x_initial": {
+      "min": -100,
+      "max": 100,
+      "default": 0
+    },
+    "y_initial": {
+      "min": -100,
+      "max": 0,
+      "default": 0
+    },
+    "oxygen_initial": {
+      "min": 50,
+      "max": 200
+    },
+    "difficulty": {
+      "choices": ["facil", "normal", "dificil"],
+      "default": "normal"
+    },
+    "max_attempts": 3
+  },
+
+  "narratives": {
+    "WIN_FULL": "Mision cumplida: el Atalaya ha sido localizado y el Abismo ha regresado a la base con exito.",
+    "WIN_PARTIAL": "Mision parcial: el Atalaya fue encontrado, pero el Abismo no logro regresar a la base.",
+    "LOSE_OXY": "Fracaso: el submarino se ha quedado sin oxigeno en las profundidades del abismo.",
+    "LOSE_HULL": "Fracaso: el casco del Abismo ha implosionado bajo la presion abisal.",
+    "LOSE_STEPS": "Fracaso: el tiempo de mision se ha agotado sin completar los objetivos.",
+    "LOSE_BOUNDS": "Fracaso: el Abismo ha salido del area de operaciones en repetidas ocasiones.",
+    "QUIT": "Mision abandonada voluntariamente por el capitan."
+  }
+}
