@@ -1,10 +1,10 @@
 """
-game.py — Turn loop and per-turn action mechanics (part 1/2).
+game.py — Turn loop, per-turn mechanics and end-condition evaluation.
 
 Sets up the World and Submarine from the validated parameters and runs the
-turn loop: pending drift, action resolution, element effects, oxygen decay
-and random events. End-condition evaluation and final result determination
-are handled in part 2; see the marked stub below.
+turn loop (pending drift, action resolution, element effects, oxygen decay,
+random events) until an end condition fires (spec §10), then determines the
+final result: full win, partial win, loss or voluntary quit.
 
 All numeric constants are loaded from config.json. The only I/O performed
 here is through ui (prompt_action, print_turn).
@@ -24,9 +24,10 @@ _CFG_PATH = Path(__file__).parent / "config.json"
 with open(_CFG_PATH, "r", encoding="utf-8") as _f:
     CFG: dict = json.load(_f)
 
-# Temporary part-1 stub: hard stop so the loop always terminates until the
-# real end-condition checks land in part 2.
-_SAFETY_CAP = 200
+# Sanity guard against an unbounded loop. The real terminator is the
+# end-condition check; LOSE_STEPS always fires at the step limit long before
+# this cap, so it should never be the actual reason a mission ends.
+_SANITY_CAP = 10000
 
 _MOVE_ACTIONS = {"N", "S", "E", "O"}
 _MOVE_VERB = {
@@ -244,6 +245,53 @@ def _apply_oxygen_decay(submarine: Submarine) -> tuple[int, Optional[str]]:
     return decay, note
 
 
+def _evaluate_end(
+    submarine: Submarine, world: World, difficulty_config: dict
+) -> Optional[str]:
+    """Return the end-condition id if one fired this turn, else None (spec §10).
+
+    Fixed evaluation order: hull, oxygen, bounds, steps, quit, full win.
+    """
+    res = CFG["resources"]
+    end_cfg = CFG["end_conditions"]
+    if submarine.hull <= res["hull_min"]:
+        return "LOSE_HULL"
+    if submarine.oxygen <= res["oxygen_min"]:
+        return "LOSE_OXY"
+    if submarine.bound_violations >= end_cfg["bound_violation_limit"]:
+        return "LOSE_BOUNDS"
+    if submarine.steps >= difficulty_config["step_limit"]:
+        return "LOSE_STEPS"
+    if submarine.state_flags.get("quit"):
+        return "QUIT"
+    at_base = (submarine.x, submarine.y) == (world.base_x, world.base_y)
+    resources_ok = (
+        submarine.oxygen > res["oxygen_min"]
+        and submarine.battery > res["battery_min"]
+        and submarine.hull > res["hull_min"]
+    )
+    # WIN_FULL is checked last, so reaching (0,0) with the Atalaya found and
+    # resources still positive wins even if oxygen would deplete next turn.
+    if at_base and submarine.atalaya_found and resources_ok:
+        return "WIN_FULL"
+    return None
+
+
+def _determine_result(end_id: str, submarine: Submarine) -> str:
+    """Map a fired end condition to the final mission result (spec §10, §13)."""
+    if end_id == "WIN_FULL":
+        return "WIN_FULL"
+    # salir is always a voluntary quit: a captain at the goal would not choose
+    # it, and _evaluate_end already ranks QUIT ahead of WIN_FULL.
+    if end_id == "QUIT":
+        return "QUIT"
+    # Any losing end condition with the Atalaya already located is a partial
+    # success (found it but did not make it home alive).
+    if submarine.atalaya_found:
+        return "WIN_PARTIAL"
+    return end_id
+
+
 def run_mission(params: dict, rng: random.Random) -> dict:
     """
     Set up the world and submarine from params and run the turn loop.
@@ -254,7 +302,7 @@ def run_mission(params: dict, rng: random.Random) -> dict:
         rng: seeded random generator shared across the mission.
 
     Returns:
-        A placeholder result dict; part 2 fills in the end condition and result.
+        A complete result dict describing how the mission ended (spec §13).
     """
     difficulty = params["difficulty"]
     difficulty_config = CFG["difficulty"][difficulty]
@@ -269,8 +317,11 @@ def run_mission(params: dict, rng: random.Random) -> dict:
         hull=res["hull_initial"],
     )
 
+    turn_history: list[dict] = []
+    end_id: Optional[str] = None
+
     iterations = 0
-    while iterations < _SAFETY_CAP:
+    while iterations < _SANITY_CAP:
         iterations += 1
 
         pos_before = (submarine.x, submarine.y)
@@ -291,6 +342,16 @@ def run_mission(params: dict, rng: random.Random) -> dict:
         _apply_action(action, submarine, world, rng, notes)
         cause_parts.extend(notes)
 
+        # Mark arrival before applying any same-tile element damage, so a
+        # hull-killing element on the arrival turn still resolves to WIN_PARTIAL
+        # (Atalaya found) rather than a plain loss.
+        if (submarine.x, submarine.y) == (world.atalaya_x, world.atalaya_y) \
+                and not submarine.atalaya_found:
+            submarine.atalaya_found = True
+            cause_parts.append(
+                f"Atalaya localizado en ({world.atalaya_x}, {world.atalaya_y})."
+            )
+
         element_desc: Optional[str] = None
         moved = (submarine.x, submarine.y) != pos_before
         if moved:
@@ -299,13 +360,6 @@ def run_mission(params: dict, rng: random.Random) -> dict:
                 ex, ey, etype = element.x, element.y, element.type_id
                 element_desc = _apply_element(element, submarine, world, rng)
                 submarine.visited_elements.add((ex, ey, etype))
-
-        if (submarine.x, submarine.y) == (world.atalaya_x, world.atalaya_y) \
-                and not submarine.atalaya_found:
-            submarine.atalaya_found = True
-            cause_parts.append(
-                f"Atalaya localizado en ({world.atalaya_x}, {world.atalaya_y})."
-            )
 
         _, oxy_note = _apply_oxygen_decay(submarine)
         if oxy_note:
@@ -328,15 +382,36 @@ def run_mission(params: dict, rng: random.Random) -> dict:
             "event": event_desc,
             "cause": cause,
         }
+        turn_history.append(turn_data)
         ui.print_turn(turn_data)
 
-        # TODO(part2): evaluate end conditions here per spec §10
-        # (hull -> oxy -> bounds -> steps -> goal), set the result and break.
+        end_id = _evaluate_end(submarine, world, difficulty_config)
+        if end_id is not None:
+            break
+
+    # The loop only exits via _evaluate_end in practice (LOSE_STEPS guarantees
+    # termination). A cap-out is treated as a time-out so the result is defined.
+    if end_id is None:
+        end_id = "LOSE_STEPS"
+
+    final_result = _determine_result(end_id, submarine)
 
     return {
-        "params": params,
-        "submarine": submarine,
-        "world": world,
-        "end_condition": None,
-        "result": None,
+        "end_condition_id": end_id,
+        "final_result": final_result,
+        "captain_name": params["captain_name"],
+        "sub_name": params["submarine_name"],
+        "initial_params": params,
+        "final_position": (submarine.x, submarine.y),
+        "steps": submarine.steps,
+        "final_resources": {
+            "oxygen": submarine.oxygen,
+            "battery": submarine.battery,
+            "hull": submarine.hull,
+        },
+        "atalaya_position": (world.atalaya_x, world.atalaya_y),
+        "atalaya_found": submarine.atalaya_found,
+        "visited_elements": sorted(submarine.visited_elements),
+        "suffered_events": list(submarine.suffered_events),
+        "turn_history": turn_history,
     }
