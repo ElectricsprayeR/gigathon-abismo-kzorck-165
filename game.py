@@ -342,31 +342,38 @@ def run_mission(params: dict, rng: random.Random) -> dict:
         _apply_action(action, submarine, world, rng, notes)
         cause_parts.extend(notes)
 
-        # Mark arrival before applying any same-tile element damage, so a
-        # hull-killing element on the arrival turn still resolves to WIN_PARTIAL
-        # (Atalaya found) rather than a plain loss.
-        if (submarine.x, submarine.y) == (world.atalaya_x, world.atalaya_y) \
-                and not submarine.atalaya_found:
-            submarine.atalaya_found = True
-            cause_parts.append(
-                f"Atalaya localizado en ({world.atalaya_x}, {world.atalaya_y})."
-            )
-
         element_desc: Optional[str] = None
-        moved = (submarine.x, submarine.y) != pos_before
-        if moved:
-            element = world.element_at(submarine.x, submarine.y)
-            if element is not None:
-                ex, ey, etype = element.x, element.y, element.type_id
-                element_desc = _apply_element(element, submarine, world, rng)
-                submarine.visited_elements.add((ex, ey, etype))
+        event_desc: Optional[str] = None
 
-        _, oxy_note = _apply_oxygen_decay(submarine)
-        if oxy_note:
-            cause_parts.append(oxy_note)
+        # A voluntary abandon (salir) ends the dive at once: per spec §9 it has
+        # no cost, so this turn skips arrival, element, oxygen decay and events,
+        # keeping salir an unconditional QUIT instead of, e.g., a low-oxygen loss.
+        if not submarine.state_flags.get("quit"):
+            # Mark arrival before applying any same-tile element damage, so a
+            # hull-killing element on the arrival turn still resolves to
+            # WIN_PARTIAL (Atalaya found) rather than a plain loss.
+            if (submarine.x, submarine.y) == (world.atalaya_x, world.atalaya_y) \
+                    and not submarine.atalaya_found:
+                submarine.atalaya_found = True
+                cause_parts.append(
+                    f"Atalaya localizado en ({world.atalaya_x}, {world.atalaya_y})."
+                )
 
-        event = events.maybe_trigger_event(submarine, world, difficulty_config, rng)
-        event_desc = event[1] if event is not None else None
+            if (submarine.x, submarine.y) != pos_before:
+                element = world.element_at(submarine.x, submarine.y)
+                if element is not None:
+                    ex, ey, etype = element.x, element.y, element.type_id
+                    element_desc = _apply_element(element, submarine, world, rng)
+                    submarine.visited_elements.add((ex, ey, etype))
+
+            _, oxy_note = _apply_oxygen_decay(submarine)
+            if oxy_note:
+                cause_parts.append(oxy_note)
+
+            event = events.maybe_trigger_event(
+                submarine, world, difficulty_config, rng
+            )
+            event_desc = event[1] if event is not None else None
 
         submarine.steps += 1
 
