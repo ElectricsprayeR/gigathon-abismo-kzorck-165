@@ -1,4 +1,3 @@
-"""main.py — Entry point and restart loop."""
 
 import random
 import sys
