@@ -1,11 +1,4 @@
-"""
-report.py — Final mission report builder (spec §13).
-
-Accepts the result dict returned by game.run_mission() and prints a
-formatted board-log-style report to stdout. All labels are in Spanish;
-all config strings (narratives, element/event names) are loaded from
-config.json so none are hard-coded here.
-"""
+"""report.py — Final mission report builder."""
 
 import json
 from pathlib import Path
@@ -45,11 +38,6 @@ def _sep(char: str = "=", width: int = 48) -> str:
 
 
 def print_report(result: dict[str, Any]) -> None:
-    """Print the full mission report to stdout.
-
-    Args:
-        result: the dict returned by game.run_mission().
-    """
     params: dict = result["initial_params"]
     final_res: dict = result["final_resources"]
     end_id: str = result["end_condition_id"]
