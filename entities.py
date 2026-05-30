@@ -1,17 +1,6 @@
-"""
-entities.py — Core game objects: Submarine, World, Element.
-
-All numeric constants are loaded from config.json at module load time.
-No I/O occurs here; this file is pure data and logic.
-
-Design note — single Element dataclass vs subclasses: all six element types
-share identical structure (position, type id, consumed flag). Type-specific
-behaviour is fully described by config.json data, so subclassing would add
-indirection with no benefit.
-"""
+"""entities.py — Submarine, World, Element."""
 
 import json
-import math
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -43,10 +32,6 @@ class Submarine:
     bound_violations: int = 0
     atalaya_found: bool = False
     state_flags: dict[str, object] = field(default_factory=dict)
-
-    def is_alive(self) -> bool:
-        r = CFG["resources"]
-        return self.oxygen > r["oxygen_min"] and self.hull > r["hull_min"]
 
     def apply_cost(self, resource_name: str, amount: int) -> None:
         current = getattr(self, resource_name)
@@ -111,5 +96,3 @@ class World:
                     placed += 1
                 attempts += 1
 
-    def distance_to_atalaya(self, x: int, y: int) -> float:
-        return math.sqrt((x - self.atalaya_x) ** 2 + (y - self.atalaya_y) ** 2)

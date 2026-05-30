@@ -1,14 +1,4 @@
-"""
-game.py — Turn loop, per-turn mechanics and end-condition evaluation.
-
-Sets up the World and Submarine from the validated parameters and runs the
-turn loop (pending drift, action resolution, element effects, oxygen decay,
-random events) until an end condition fires (spec §10), then determines the
-final result: full win, partial win, loss or voluntary quit.
-
-All numeric constants are loaded from config.json. The only I/O performed
-here is through ui (prompt_action, print_turn).
-"""
+"""game.py — Turn loop and end-condition evaluation."""
 
 import json
 import math
@@ -24,9 +14,7 @@ _CFG_PATH = Path(__file__).parent / "config.json"
 with open(_CFG_PATH, "r", encoding="utf-8") as _f:
     CFG: dict = json.load(_f)
 
-# Sanity guard against an unbounded loop. The real terminator is the
-# end-condition check; LOSE_STEPS always fires at the step limit long before
-# this cap, so it should never be the actual reason a mission ends.
+# LOSE_STEPS fires well before this; it's here so the loop has a hard exit.
 _SANITY_CAP = 10000
 
 _MOVE_ACTIONS = {"N", "S", "E", "O"}
@@ -36,6 +24,7 @@ _MOVE_VERB = {
     "E": "Avance al este",
     "O": "Avance al oeste",
 }
+_ELEMENT_NAMES: dict[str, str] = {k: v["name_es"] for k, v in CFG["elements"].items()}
 
 
 def _clamp(value: int, low: int, high: int) -> int:
@@ -50,38 +39,26 @@ def _snapshot(submarine: Submarine) -> dict:
     }
 
 
-def _element_names() -> dict[str, str]:
-    return {key: val["name_es"] for key, val in CFG["elements"].items()}
-
-
-def _build_scan_report(
-    submarine: Submarine, world: World, rng: random.Random, radius: int
-) -> str:
-    """Return a Spanish scan description; corrupted if a ghost sonar is active."""
-    names = _element_names()
+def _build_scan_report(submarine: Submarine, world: World, rng: random.Random, radius: int) -> str:
     if submarine.state_flags.pop("ghost_scan_active", False):
-        fake = []
-        for _ in range(rng.randint(1, 3)):
-            type_id = rng.choice(list(names.keys()))
-            fx = rng.randint(world.x_min, world.x_max)
-            fy = rng.randint(world.y_min, world.y_max)
-            fake.append(f"{names[type_id]} en ({fx},{fy})")
+        fake = [
+            f"{_ELEMENT_NAMES[rng.choice(list(_ELEMENT_NAMES))]} en "
+            f"({rng.randint(world.x_min, world.x_max)},{rng.randint(world.y_min, world.y_max)})"
+            for _ in range(rng.randint(1, 3))
+        ]
         return "Escaneo corrompido por sonar fantasma: " + ", ".join(fake) + "."
 
-    found = []
-    for (ex, ey), el in world.placed_elements.items():
-        if el.used:
-            continue
-        distance = math.sqrt((ex - submarine.x) ** 2 + (ey - submarine.y) ** 2)
-        if distance <= radius:
-            found.append(f"{names[el.type_id]} en ({ex},{ey})")
+    found = [
+        f"{_ELEMENT_NAMES[el.type_id]} en ({ex},{ey})"
+        for (ex, ey), el in world.placed_elements.items()
+        if not el.used and math.sqrt((ex - submarine.x) ** 2 + (ey - submarine.y) ** 2) <= radius
+    ]
     if not found:
         return "Escaneo completado: sin elementos en el radio de barrido."
     return "Escaneo completado: " + ", ".join(found) + "."
 
 
 def _narrow_known_zone(world: World, reduction_pct: int) -> None:
-    """Shrink the suspected Atalaya zone toward its true position by reduction_pct."""
     factor = (100 - reduction_pct) / 100.0
     zone = world.known_atalaya_zone
     ax, ay = world.atalaya_x, world.atalaya_y
@@ -115,10 +92,7 @@ def _move_squid(world: World, element: Element, rng: random.Random) -> None:
     world.placed_elements[new_pos] = element
 
 
-def _apply_element(
-    element: Element, submarine: Submarine, world: World, rng: random.Random
-) -> str:
-    """Apply one element's effect and return a Spanish description for the turn."""
+def _apply_element(element: Element, submarine: Submarine, world: World, rng: random.Random) -> str:
     cfg = CFG["elements"][element.type_id]
     name = cfg["name_es"]
     effect = cfg["effect"]
@@ -185,7 +159,6 @@ def _apply_action(
     rng: random.Random,
     notes: list[str],
 ) -> None:
-    """Resolve the chosen action, mutating submarine/world and appending cause notes."""
     if action in _MOVE_ACTIONS:
         cfg = CFG["actions"][action]
         submarine.apply_cost("battery", cfg["battery_cost"])
@@ -217,20 +190,16 @@ def _apply_action(
         cfg = CFG["actions"]["esperar"]
         submarine.apply_cost("battery", cfg["battery_cost"])
         submarine.apply_cost("oxygen", cfg["oxygen_cost"])
-        submarine.apply_gain(
-            "hull", cfg["hull_repair"], cap=CFG["resources"]["hull_initial"]
-        )
+        submarine.apply_gain("hull", cfg["hull_repair"], cap=CFG["resources"]["hull_initial"])
         notes.append(f"Espera y reparacion: +{cfg['hull_repair']} casco.")
         return
 
     if action == "salir":
         submarine.state_flags["quit"] = True
         notes.append("Mision abandonada voluntariamente por el capitan.")
-        return
 
 
-def _apply_oxygen_decay(submarine: Submarine) -> tuple[int, Optional[str]]:
-    """Apply per-turn oxygen decay (depth-dependent). Returns (decay, note)."""
+def _apply_oxygen_decay(submarine: Submarine) -> Optional[str]:
     res = CFG["resources"]
     world_cfg = CFG["world"]
     decay = res["oxygen_decay_base"]
@@ -239,19 +208,12 @@ def _apply_oxygen_decay(submarine: Submarine) -> tuple[int, Optional[str]]:
     if submarine.y <= world_cfg["depth_penalty_threshold_2"]:
         decay += res["oxygen_decay_depth_2"]
     submarine.apply_cost("oxygen", decay)
-    note = None
     if decay > res["oxygen_decay_base"]:
-        note = f"Mayor consumo de oxigeno por profundidad (-{decay})."
-    return decay, note
+        return f"Mayor consumo de oxigeno por profundidad (-{decay})."
+    return None
 
 
-def _evaluate_end(
-    submarine: Submarine, world: World, difficulty_config: dict
-) -> Optional[str]:
-    """Return the end-condition id if one fired this turn, else None (spec §10).
-
-    Fixed evaluation order: hull, oxygen, bounds, steps, quit, full win.
-    """
+def _evaluate_end(submarine: Submarine, world: World, difficulty_config: dict) -> Optional[str]:
     res = CFG["resources"]
     end_cfg = CFG["end_conditions"]
     if submarine.hull <= res["hull_min"]:
@@ -264,46 +226,28 @@ def _evaluate_end(
         return "LOSE_STEPS"
     if submarine.state_flags.get("quit"):
         return "QUIT"
+    # WIN_FULL is last so hull/oxy/bounds/steps losses take precedence.
     at_base = (submarine.x, submarine.y) == (world.base_x, world.base_y)
     resources_ok = (
         submarine.oxygen > res["oxygen_min"]
         and submarine.battery > res["battery_min"]
         and submarine.hull > res["hull_min"]
     )
-    # WIN_FULL is checked last, so reaching (0,0) with the Atalaya found and
-    # resources still positive wins even if oxygen would deplete next turn.
     if at_base and submarine.atalaya_found and resources_ok:
         return "WIN_FULL"
     return None
 
 
 def _determine_result(end_id: str, submarine: Submarine) -> str:
-    """Map a fired end condition to the final mission result (spec §10, §13)."""
-    if end_id == "WIN_FULL":
-        return "WIN_FULL"
-    # salir is always a voluntary quit: a captain at the goal would not choose
-    # it, and _evaluate_end already ranks QUIT ahead of WIN_FULL.
-    if end_id == "QUIT":
-        return "QUIT"
-    # Any losing end condition with the Atalaya already located is a partial
-    # success (found it but did not make it home alive).
+    if end_id in ("WIN_FULL", "QUIT"):
+        return end_id
+    # Any loss with the Atalaya already found counts as a partial success.
     if submarine.atalaya_found:
         return "WIN_PARTIAL"
     return end_id
 
 
 def run_mission(params: dict, rng: random.Random) -> dict:
-    """
-    Set up the world and submarine from params and run the turn loop.
-
-    Args:
-        params: validated initial parameters (captain_name, submarine_name,
-                difficulty, x0, y0, oxygen).
-        rng: seeded random generator shared across the mission.
-
-    Returns:
-        A complete result dict describing how the mission ended (spec §13).
-    """
     difficulty = params["difficulty"]
     difficulty_config = CFG["difficulty"][difficulty]
     res = CFG["resources"]
@@ -334,9 +278,7 @@ def run_mission(params: dict, rng: random.Random) -> dict:
         if drift is not None:
             submarine.x = _clamp(submarine.x + drift[0], world.x_min, world.x_max)
             submarine.y = _clamp(submarine.y + drift[1], world.y_min, world.y_max)
-            cause_parts.append(
-                f"Corriente abisal arrastra el submarino ({drift[0]},{drift[1]})."
-            )
+            cause_parts.append(f"Corriente abisal arrastra el submarino ({drift[0]},{drift[1]}).")
 
         notes: list[str] = []
         _apply_action(action, submarine, world, rng, notes)
@@ -345,19 +287,15 @@ def run_mission(params: dict, rng: random.Random) -> dict:
         element_desc: Optional[str] = None
         event_desc: Optional[str] = None
 
-        # A voluntary abandon (salir) ends the dive at once: per spec §9 it has
-        # no cost, so this turn skips arrival, element, oxygen decay and events,
-        # keeping salir an unconditional QUIT instead of, e.g., a low-oxygen loss.
+        # salir skips arrival/elements/decay/events so it can't be outrun by a
+        # simultaneous resource loss — it's always an unconditional QUIT.
         if not submarine.state_flags.get("quit"):
-            # Mark arrival before applying any same-tile element damage, so a
-            # hull-killing element on the arrival turn still resolves to
-            # WIN_PARTIAL (Atalaya found) rather than a plain loss.
+            # Mark arrival before element damage: hull-kill on the Atalaya tile
+            # still resolves to WIN_PARTIAL rather than a plain loss.
             if (submarine.x, submarine.y) == (world.atalaya_x, world.atalaya_y) \
                     and not submarine.atalaya_found:
                 submarine.atalaya_found = True
-                cause_parts.append(
-                    f"Atalaya localizado en ({world.atalaya_x}, {world.atalaya_y})."
-                )
+                cause_parts.append(f"Atalaya localizado en ({world.atalaya_x}, {world.atalaya_y}).")
 
             if (submarine.x, submarine.y) != pos_before:
                 element = world.element_at(submarine.x, submarine.y)
@@ -366,18 +304,16 @@ def run_mission(params: dict, rng: random.Random) -> dict:
                     element_desc = _apply_element(element, submarine, world, rng)
                     submarine.visited_elements.add((ex, ey, etype))
 
-            _, oxy_note = _apply_oxygen_decay(submarine)
+            oxy_note = _apply_oxygen_decay(submarine)
             if oxy_note:
                 cause_parts.append(oxy_note)
 
-            event = events.maybe_trigger_event(
-                submarine, world, difficulty_config, rng
-            )
+            event = events.maybe_trigger_event(submarine, world, difficulty_config, rng)
             event_desc = event[1] if event is not None else None
 
         submarine.steps += 1
 
-        cause = " ".join(part for part in cause_parts if part) or "Turno sin incidencias."
+        cause = " ".join(cause_parts) or "Turno sin incidencias."
         turn_data = {
             "step": submarine.steps,
             "action": action,
@@ -396,8 +332,6 @@ def run_mission(params: dict, rng: random.Random) -> dict:
         if end_id is not None:
             break
 
-    # The loop only exits via _evaluate_end in practice (LOSE_STEPS guarantees
-    # termination). A cap-out is treated as a time-out so the result is defined.
     if end_id is None:
         end_id = "LOSE_STEPS"
 

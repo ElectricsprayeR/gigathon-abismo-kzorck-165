@@ -1,9 +1,4 @@
-"""
-ui.py — All terminal I/O: prompts, validation, turn display, banners.
-
-No game logic lives here. Functions accept and return primitives.
-All strings shown to the user are in Spanish.
-"""
+"""ui.py — All terminal I/O: prompts, validation, turn display, banners."""
 
 import json
 import sys
@@ -38,16 +33,17 @@ def _safe_input(prompt: str) -> str:
 def _prompt_string(label: str, default: str, min_len: int, max_len: int, max_attempts: int) -> str:
     for attempt in range(max_attempts):
         raw = _safe_input(f"{label} [default: {default}]: ").strip()
-        if raw == "":
-            if attempt < max_attempts - 1:
-                print(f"  El nombre no puede estar vacio. Intentos restantes: {max_attempts - attempt - 1}.")
+        remaining = max_attempts - attempt - 1
+        if not raw:
+            if remaining:
+                print(f"  El nombre no puede estar vacio. Intentos restantes: {remaining}.")
                 continue
-        if len(raw) < min_len or len(raw) > max_len:
-            if attempt < max_attempts - 1:
-                print(f"  Longitud invalida ({len(raw)}). Debe tener entre {min_len} y {max_len} caracteres. "
-                      f"Intentos restantes: {max_attempts - attempt - 1}.")
+            break
+        if not (min_len <= len(raw) <= max_len):
+            if remaining:
+                print(f"  Longitud invalida ({len(raw)}). Entre {min_len} y {max_len} caracteres. "
+                      f"Intentos restantes: {remaining}.")
                 continue
-        if raw == "":
             break
         return raw
     print(f"  Demasiados intentos fallidos. Usando valor por defecto: '{default}'.")
@@ -57,20 +53,19 @@ def _prompt_string(label: str, default: str, min_len: int, max_len: int, max_att
 def _prompt_int(label: str, min_val: int, max_val: int, default: int, max_attempts: int) -> int:
     for attempt in range(max_attempts):
         raw = _safe_input(f"{label} [default: {default}]: ").strip()
-        if raw == "":
+        if not raw:
             print(f"  Usando valor por defecto: {default}.")
             return default
+        remaining = max_attempts - attempt - 1
         try:
             value = int(raw)
         except ValueError:
-            remaining = max_attempts - attempt - 1
-            if remaining > 0:
+            if remaining:
                 print(f"  Valor no valido. Introduce un numero entero. Intentos restantes: {remaining}.")
                 continue
             break
         if not (min_val <= value <= max_val):
-            remaining = max_attempts - attempt - 1
-            if remaining > 0:
+            if remaining:
                 print(f"  Fuera de rango. El valor debe estar entre {min_val} y {max_val}. "
                       f"Intentos restantes: {remaining}.")
                 continue
@@ -84,13 +79,13 @@ def _prompt_choice(label: str, choices: list[str], default: str, max_attempts: i
     options = " / ".join(choices)
     for attempt in range(max_attempts):
         raw = _safe_input(f"{label} ({options}) [default: {default}]: ").strip().lower()
-        if raw == "":
+        if not raw:
             print(f"  Usando valor por defecto: {default}.")
             return default
         if raw in choices:
             return raw
         remaining = max_attempts - attempt - 1
-        if remaining > 0:
+        if remaining:
             print(f"  Opcion no valida. Elige entre: {options}. Intentos restantes: {remaining}.")
     print(f"  Demasiados intentos fallidos. Usando valor por defecto: {default}.")
     return default
@@ -107,12 +102,6 @@ def print_banner() -> None:
 
 
 def prompt_initial_params() -> dict:
-    """
-    Prompt user for all initial parameters with validation.
-
-    Returns:
-        dict with keys: captain_name, submarine_name, difficulty, x0, y0, oxygen.
-    """
     v = _CFG["validation"]
     diff_cfg = _CFG["difficulty"]
     max_attempts = v["max_attempts"]
@@ -182,7 +171,6 @@ def prompt_initial_params() -> dict:
 
 
 def prompt_action() -> str:
-    """Display action menu and return a validated canonical action string."""
     print()
     print("Acciones disponibles:")
     for key, label in _ACTION_LABELS.items():
@@ -200,13 +188,6 @@ def prompt_action() -> str:
 
 
 def print_turn(turn_data: dict) -> None:
-    """
-    Render one turn to stdout in the standard format from spec §12.
-
-    Args:
-        turn_data: dict with keys step, action, pos_before, pos_after,
-                   resources_before, resources_after, element, event, cause.
-    """
     step: int = turn_data["step"]
     action: str = turn_data["action"]
     pb = turn_data["pos_before"]
@@ -246,7 +227,6 @@ def print_turn(turn_data: dict) -> None:
 
 
 def ask_restart() -> bool:
-    """Ask the user if they want to start a new mission. Returns True for yes."""
     while True:
         raw = _safe_input("Iniciar nueva mision? (s/n): ").strip().lower()
         if raw in {"s", "si", "sí"}:

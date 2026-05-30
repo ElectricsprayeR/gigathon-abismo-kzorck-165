@@ -1,9 +1,4 @@
-"""
-events.py — Random event pool and dispatcher.
-
-All event metadata and probabilities are loaded from config.json.
-No I/O occurs here; descriptions are returned as strings for ui.py to render.
-"""
+"""events.py — Random event pool and dispatcher."""
 
 import json
 import math
@@ -59,7 +54,6 @@ def _apply_ghost(submarine: Submarine, world: World, rng: random.Random) -> str:
 
 
 def _apply_beacon(submarine: Submarine, world: World, rng: random.Random) -> str:
-    submarine.state_flags["beacon_active"] = True
     dx = world.atalaya_x - submarine.x
     dy = world.atalaya_y - submarine.y
     parts = []
