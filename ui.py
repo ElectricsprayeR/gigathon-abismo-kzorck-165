@@ -156,6 +156,14 @@ def prompt_initial_params() -> dict:
     print()
     print("--- Configuracion de la mision ---")
     print()
+    print("  Capitan     : identifica al capitan que aparecera en el informe final.")
+    print("  Submarino   : nombre del sumergible que comandaras durante la mision.")
+    print("  Dificultad  : determina el oxigeno inicial, el limite de turnos,")
+    print("                la zona del Atalaya y la frecuencia de eventos.")
+    print("  X inicial   : coordenada horizontal de partida (rango: -100..100).")
+    print("  Y inicial   : coordenada vertical de partida (rango: -100..0; y=0 es la superficie).")
+    print("  Oxigeno     : reserva inicial; se consume cada turno, mas rapido a gran profundidad.")
+    print()
 
     captain_name = _prompt_string(
         "Nombre del capitan (1-30 caracteres)",
