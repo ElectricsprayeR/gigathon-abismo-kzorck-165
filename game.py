@@ -40,7 +40,8 @@ def _snapshot(submarine: Submarine) -> dict:
 
 
 def _build_scan_report(submarine: Submarine, world: World, rng: random.Random, radius: int) -> str:
-    if submarine.state_flags.pop("ghost_scan_active", False):
+    if submarine.state_flags.get("ghost_turns_remaining", 0) > 0:
+        submarine.state_flags.pop("ghost_turns_remaining")
         fake = [
             f"{_ELEMENT_NAMES[rng.choice(list(_ELEMENT_NAMES))]} en "
             f"({rng.randint(world.x_min, world.x_max)},{rng.randint(world.y_min, world.y_max)})"
@@ -312,6 +313,11 @@ def run_mission(params: dict, rng: random.Random) -> dict:
 
             event = events.maybe_trigger_event(submarine, world, difficulty_config, rng)
             event_desc = event[1] if event is not None else None
+
+        if submarine.state_flags.get("ghost_turns_remaining", 0) > 0:
+            submarine.state_flags["ghost_turns_remaining"] -= 1
+            if submarine.state_flags["ghost_turns_remaining"] == 0:
+                submarine.state_flags.pop("ghost_turns_remaining")
 
         submarine.steps += 1
 
