@@ -49,8 +49,12 @@ def _apply_leak(submarine: Submarine, world: World, rng: random.Random) -> str:
 
 
 def _apply_ghost(submarine: Submarine, world: World, rng: random.Random) -> str:
-    submarine.state_flags["ghost_scan_active"] = True
-    return "Interferencia en el sonar. El proximo escaneo devolvera datos falsos."
+    turns = _CFG["events"]["GHOST"]["effect"]["ghost_turns"]
+    submarine.state_flags["ghost_turns_remaining"] = turns
+    return (
+        f"Interferencia en el sonar. El proximo escaneo en los "
+        f"siguientes {turns} turnos devolvera datos falsos."
+    )
 
 
 def _apply_beacon(submarine: Submarine, world: World, rng: random.Random) -> str:

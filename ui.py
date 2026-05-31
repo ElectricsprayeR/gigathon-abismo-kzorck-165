@@ -91,6 +91,53 @@ def _prompt_choice(label: str, choices: list[str], default: str, max_attempts: i
     return default
 
 
+_END_CONDITION_DESCRIPTIONS: dict[str, str] = {
+    "WIN_FULL":    "Victoria: Atalaya localizado y regreso a la base con recursos positivos.",
+    "LOSE_HULL":   "Derrota: el casco llega a cero (implosion).",
+    "LOSE_OXY":    "Derrota: el oxigeno llega a cero (asfixia).",
+    "LOSE_BOUNDS": "Derrota: cinco salidas del area de operaciones.",
+    "LOSE_STEPS":  "Derrota: limite de turnos agotado sin completar objetivos.",
+    "QUIT":        "Abandono voluntario de la mision.",
+}
+
+
+def print_mission_briefing(params: dict, world: object, difficulty_cfg: dict) -> None:
+    world_cfg = _CFG["world"]
+    zone = world.known_atalaya_zone
+
+    print()
+    print(_LINE_WIDE)
+    print("   BRIEFING DE MISION")
+    print(_LINE_WIDE)
+    print(f"Capitan:        {params['captain_name']}")
+    print(f"Submarino:      {params['submarine_name']}")
+    print(f"Posicion inicial: ({params['x0']}, {params['y0']})")
+    print()
+    print("Recursos iniciales:")
+    print(f"  Oxigeno:  {params['oxygen']}")
+    print(f"  Bateria:  {_CFG['resources']['battery_initial']}")
+    print(f"  Casco:    {_CFG['resources']['hull_initial']}")
+    print()
+    print("Limites del mundo:")
+    print(f"  X: [{world_cfg['x_min']}, {world_cfg['x_max']}]")
+    print(f"  Y: [{world_cfg['y_min']}, {world_cfg['y_max']}]  (y=0 es la superficie)")
+    print(f"  Base de operaciones: ({world_cfg['base_x']}, {world_cfg['base_y']})")
+    print()
+    print("Zona sospechada del Atalaya:")
+    print(f"  X: [{zone['x_min']}, {zone['x_max']}]")
+    print(f"  Y: [{zone['y_min']}, {zone['y_max']}]")
+    print()
+    print("Dificultad:")
+    print(f"  Limite de turnos:        {difficulty_cfg['step_limit']}")
+    print(f"  Probabilidad de evento:  {int(difficulty_cfg['event_probability'] * 100)}% por turno")
+    print()
+    print("Condiciones de finalizacion:")
+    for code, desc in _END_CONDITION_DESCRIPTIONS.items():
+        print(f"  {code:<14} {desc}")
+    print(_LINE_WIDE)
+    print()
+
+
 def print_banner() -> None:
     print(_LINE_WIDE)
     print("   ABISMO -- MISION DE RESCATE")
@@ -108,6 +155,14 @@ def prompt_initial_params() -> dict:
 
     print()
     print("--- Configuracion de la mision ---")
+    print()
+    print("  Capitan     : identifica al capitan que aparecera en el informe final.")
+    print("  Submarino   : nombre del sumergible que comandaras durante la mision.")
+    print("  Dificultad  : determina el oxigeno inicial, el limite de turnos,")
+    print("                la zona del Atalaya y la frecuencia de eventos.")
+    print("  X inicial   : coordenada horizontal de partida (rango: -100..100).")
+    print("  Y inicial   : coordenada vertical de partida (rango: -100..0; y=0 es la superficie).")
+    print("  Oxigeno     : reserva inicial; se consume cada turno, mas rapido a gran profundidad.")
     print()
 
     captain_name = _prompt_string(

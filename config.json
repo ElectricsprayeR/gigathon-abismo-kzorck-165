@@ -146,7 +146,7 @@
     "GHOST": {
       "name_es": "Sonar fantasma",
       "effect": {
-        "next_scan_false": true
+        "ghost_turns": 3
       }
     },
     "BEACON": {
