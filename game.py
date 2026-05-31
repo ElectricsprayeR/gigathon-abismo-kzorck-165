@@ -261,6 +261,8 @@ def run_mission(params: dict, rng: random.Random) -> dict:
         hull=res["hull_initial"],
     )
 
+    ui.print_mission_briefing(params, world, difficulty_config)
+
     turn_history: list[dict] = []
     end_id: Optional[str] = None
 
